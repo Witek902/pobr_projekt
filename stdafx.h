@@ -7,7 +7,9 @@
 #include <map>
 #include <set>
 #include <vector>
+#include <iomanip>
 
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui.hpp>

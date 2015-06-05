@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "Segment.hpp"
 
-#define HISTOGRAM_CUT 20
+#define HISTOGRAM_CUT 15
 #define COLOR_TRESHOLD 0.5f
 
 /**
@@ -72,6 +72,46 @@ cv::Mat Preprocess(const cv::Mat& m, float treshold = 0.5f)
     }
 
     return result;
+}
+
+/**
+* Simple sharpening filter
+*/
+cv::Mat Sharpen(const cv::Mat& m)
+{
+    const float filter[3][3] =
+    {
+        { -1.0f, -2.0f, -1.0f },
+        { -2.0f, 16.0f, -2.0f },
+        { -1.0f, -2.0f, -1.0f },
+    };
+
+    cv::Mat output(m.rows, m.cols, CV_8UC3);
+    for (int i = 0; i < m.rows; ++i)
+    {
+        for (int j = 0; j < m.cols; ++j)
+        {
+            float sumR = 0.0f, sumG = 0.0f, sumB = 0.0f;
+            for (int k = 0; k < 3; ++k)
+                for (int l = 0; l < 3; ++l)
+                {
+                    int y = std::max(0, std::min(m.rows - 1, i + k - 1));
+                    int x = std::max(0, std::min(m.cols - 1, j + l - 1));
+                    cv::Vec3b color = m.at<cv::Vec3b>(y, x);
+                    sumR += filter[k][l] * (float)color[2];
+                    sumG += filter[k][l] * (float)color[1];
+                    sumB += filter[k][l] * (float)color[0];
+                }
+
+            sumR = std::min(255.0f, std::max(0.0f, sumR / 4.0f));
+            sumG = std::min(255.0f, std::max(0.0f, sumG / 4.0f));
+            sumB = std::min(255.0f, std::max(0.0f, sumB / 4.0f));
+
+            output.at<cv::Vec3b>(i, j) = cv::Vec3b((uchar)sumB, (uchar)sumG, (uchar)sumR);
+        }
+    }
+
+    return output;
 }
 
 /**
@@ -228,50 +268,137 @@ cv::Mat VisualizePixelGroups(const cv::Mat& input)
     return visual;
 }
 
-/*
+bool IsNeighbour(const Segment* a, const Segment* b)
+{
+    float aSizeX = a->maxx - a->minx;
+    float aSizeY = a->maxy - a->miny;
+    float bSizeX = b->maxx - b->minx;
+    float bSizeY = b->maxy - b->miny;
 
-TODO:
-* sharpening
-* moment calculation
-* segmentation
-* prepare moments databese for SAMSUNG letters
+    // letters should be similar size
+    if (aSizeX > 1.5f * bSizeX)
+        return false;
+    if (aSizeY > 1.5f * bSizeY)
+        return false;
+    if (bSizeX > 1.5f * aSizeX)
+        return false;
+    if (bSizeY > 1.5f * aSizeY)
+        return false;
 
- */
+    if (a->minx > b->maxx + bSizeX)
+        return false;
+    if (a->miny > b->maxy + bSizeY)
+        return false;
+    if (b->minx > a->maxx + aSizeX)
+        return false;
+    if (b->miny > a->maxy + aSizeY)
+        return false;
+
+    return true;
+}
+
+void FindSigns(std::vector<Segment*>& letterCandidates, cv::Mat& image)
+{
+    for (size_t i = 0; i < letterCandidates.size(); ++i)
+        for (size_t j = i + 1; j < letterCandidates.size(); ++j)
+        {
+            if (IsNeighbour(letterCandidates[i], letterCandidates[j]))
+            {
+                std::cout << i << "  " << j << std::endl;
+
+                int minx = std::min(letterCandidates[i]->minx, letterCandidates[j]->minx);
+                int maxx = std::max(letterCandidates[i]->maxx, letterCandidates[j]->maxx);
+                int miny = std::min(letterCandidates[i]->miny, letterCandidates[j]->miny);
+                int maxy = std::max(letterCandidates[i]->maxy, letterCandidates[j]->maxy);
+
+                cv::Scalar color = cv::Scalar(0.0, 0.0, 255.0);
+                cv::Rect rect = cv::Rect(minx - 1, miny - 1,
+                                         maxx - minx + 2, maxy - miny + 2);
+                cv::rectangle(image, rect, color, 1);
+            }
+        }
+}
+
+int MomentCalculator(int argc, char** argv)
+{
+    cv::Mat image, binaryImage;
+
+    for (int i = 2; i < argc; ++i)
+    {
+        const char* name = argv[i];
+
+        image = cv::imread(argv[i], cv::IMREAD_COLOR);
+        if (image.empty())
+            continue;
+
+        binaryImage = Preprocess(image, COLOR_TRESHOLD);
+
+        Segment seg;
+        seg.FromImage(binaryImage, 0);
+        seg.Process();
+
+        Moments moments = seg.CalculateMoments();
+        std::cout << moments << std::endl;
+
+        //cv::namedWindow(name, cv::WINDOW_AUTOSIZE);
+        //cv::imshow(name, binaryImage);
+    }
+
+    //cv::waitKey(0);
+    return 0;
+}
 
 int main(int argc, char** argv)
 {
-    if (argc < 1)
+    if (argc < 2)
     {
         std::cout << "Pass a file name as a parameter" << std::endl;
         return -1;
     }
 
-    cv::Mat image;
-    image = cv::imread("Test/10_small.png", cv::IMREAD_COLOR);
-    //image = cv::imread("Test/10_small.png", cv::IMREAD_COLOR);
-    if (image.empty())
+    if (strcmp(argv[1], "--moments") == 0 ||
+        strcmp(argv[1], "-m") == 0)
+    {
+        return MomentCalculator(argc, argv);
+    }
+
+    cv::Mat original;
+    original = cv::imread("Test/6.jpg", cv::IMREAD_COLOR);
+    if (original.empty())
     {
         std::cout << "Could not open or find the image" << std::endl;
         return 1;
     }
 
+    cv::Mat image = Sharpen(original);
+
     cv::Mat binaryImage = Preprocess(image, COLOR_TRESHOLD);
-    cv::namedWindow("Binary image", cv::WINDOW_AUTOSIZE);
-    cv::imshow("Binary image", binaryImage);
+    cv::namedWindow("POBR - Binary image", cv::WINDOW_AUTOSIZE);
+    cv::imshow("POBR - Binary image", binaryImage);
 
     std::vector<Segment*> segments;
     cv::Mat pixelGroups = CalculatePixelGroups(binaryImage, segments);
     cv::Mat segmentsVisual = VisualizeSegments(pixelGroups, segments);
     //cv::Mat segmentsVisual = VisualizePixelGroups(pixelGroups);
-    cv::namedWindow("Segments", cv::WINDOW_AUTOSIZE);
-    cv::imshow("Segments", segmentsVisual);
 
+    std::vector<Segment*> letterCandidates;
     for (Segment* seg : segments)
     {
-        std::cout <<
-            "min = [" << seg->minx << ", " << seg->miny <<
-            "], max = [" << seg->maxx << ", " << seg->maxy << "]" << std::endl;
+        if (seg->Classify() > 0)
+        {
+            letterCandidates.push_back(seg);
+
+            cv::Scalar color = cv::Scalar(0.0, 255.0, 20.0);
+            cv::Rect rect = cv::Rect(seg->minx - 1, seg->miny - 1,
+                                     seg->maxx - seg->minx + 2, seg->maxy - seg->miny + 2);
+            cv::rectangle(original, rect, color, 1);
+        }
     }
+
+    FindSigns(letterCandidates, original);
+
+    cv::namedWindow("POBR - original image", cv::WINDOW_AUTOSIZE);
+    cv::imshow("POBR - original image", original);
 
     cv::waitKey(0);
     return 0;
