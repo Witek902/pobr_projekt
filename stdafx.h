@@ -7,6 +7,7 @@
 #include <map>
 #include <set>
 #include <vector>
+#include <stack>
 #include <iomanip>
 
 #include <opencv2/core.hpp>

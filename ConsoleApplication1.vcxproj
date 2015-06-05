@@ -93,11 +93,13 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Groupping.hpp" />
     <ClInclude Include="Segment.hpp" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Groupping.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Segment.cpp" />
     <ClCompile Include="stdafx.cpp">

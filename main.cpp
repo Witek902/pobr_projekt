@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "Segment.hpp"
+#include "Groupping.hpp"
 
 #define HISTOGRAM_CUT 15
 #define COLOR_TRESHOLD 0.5f
@@ -268,57 +269,6 @@ cv::Mat VisualizePixelGroups(const cv::Mat& input)
     return visual;
 }
 
-bool IsNeighbour(const Segment* a, const Segment* b)
-{
-    float aSizeX = a->maxx - a->minx;
-    float aSizeY = a->maxy - a->miny;
-    float bSizeX = b->maxx - b->minx;
-    float bSizeY = b->maxy - b->miny;
-
-    // letters should be similar size
-    if (aSizeX > 1.5f * bSizeX)
-        return false;
-    if (aSizeY > 1.5f * bSizeY)
-        return false;
-    if (bSizeX > 1.5f * aSizeX)
-        return false;
-    if (bSizeY > 1.5f * aSizeY)
-        return false;
-
-    if (a->minx > b->maxx + bSizeX)
-        return false;
-    if (a->miny > b->maxy + bSizeY)
-        return false;
-    if (b->minx > a->maxx + aSizeX)
-        return false;
-    if (b->miny > a->maxy + aSizeY)
-        return false;
-
-    return true;
-}
-
-void FindSigns(std::vector<Segment*>& letterCandidates, cv::Mat& image)
-{
-    for (size_t i = 0; i < letterCandidates.size(); ++i)
-        for (size_t j = i + 1; j < letterCandidates.size(); ++j)
-        {
-            if (IsNeighbour(letterCandidates[i], letterCandidates[j]))
-            {
-                std::cout << i << "  " << j << std::endl;
-
-                int minx = std::min(letterCandidates[i]->minx, letterCandidates[j]->minx);
-                int maxx = std::max(letterCandidates[i]->maxx, letterCandidates[j]->maxx);
-                int miny = std::min(letterCandidates[i]->miny, letterCandidates[j]->miny);
-                int maxy = std::max(letterCandidates[i]->maxy, letterCandidates[j]->maxy);
-
-                cv::Scalar color = cv::Scalar(0.0, 0.0, 255.0);
-                cv::Rect rect = cv::Rect(minx - 1, miny - 1,
-                                         maxx - minx + 2, maxy - miny + 2);
-                cv::rectangle(image, rect, color, 1);
-            }
-        }
-}
-
 int MomentCalculator(int argc, char** argv)
 {
     cv::Mat image, binaryImage;
@@ -339,12 +289,8 @@ int MomentCalculator(int argc, char** argv)
 
         Moments moments = seg.CalculateMoments();
         std::cout << moments << std::endl;
-
-        //cv::namedWindow(name, cv::WINDOW_AUTOSIZE);
-        //cv::imshow(name, binaryImage);
     }
 
-    //cv::waitKey(0);
     return 0;
 }
 
@@ -363,7 +309,7 @@ int main(int argc, char** argv)
     }
 
     cv::Mat original;
-    original = cv::imread("Test/6.jpg", cv::IMREAD_COLOR);
+    original = cv::imread("Test/10.jpg", cv::IMREAD_COLOR);
     if (original.empty())
     {
         std::cout << "Could not open or find the image" << std::endl;
@@ -381,21 +327,50 @@ int main(int argc, char** argv)
     cv::Mat segmentsVisual = VisualizeSegments(pixelGroups, segments);
     //cv::Mat segmentsVisual = VisualizePixelGroups(pixelGroups);
 
+
     std::vector<Segment*> letterCandidates;
     for (Segment* seg : segments)
     {
         if (seg->Classify() > 0)
         {
             letterCandidates.push_back(seg);
-
+            /*
             cv::Scalar color = cv::Scalar(0.0, 255.0, 20.0);
             cv::Rect rect = cv::Rect(seg->minx - 1, seg->miny - 1,
                                      seg->maxx - seg->minx + 2, seg->maxy - seg->miny + 2);
             cv::rectangle(original, rect, color, 1);
+            */
         }
     }
 
-    FindSigns(letterCandidates, original);
+    std::vector<SegmentGroup> groups;
+    PerformSegmentGroupping(letterCandidates, groups);
+    std::cout << "Groups found: " << groups.size() << std::endl;
+
+    int validGroups = 0;
+    for (const auto& group : groups)
+    {
+        if (group.size() == 7)
+        {
+            int minx = 1000000, miny = 1000000, maxx = 0, maxy = 0;
+            for (const Segment* seg : group)
+            {
+                minx = std::min(minx, seg->minx);
+                maxx = std::max(maxx, seg->maxx);
+                miny = std::min(miny, seg->miny);
+                maxy = std::max(maxy, seg->maxy);
+            }
+
+            std::cout << "Group #" << validGroups++ <<
+                "  minX=" << minx << ", minY=" << miny <<
+                ", maxX=" << maxx << ", maxY=" << maxy << std::endl;
+
+            // draw valid group
+            cv::Scalar color = cv::Scalar(0.0, 255.0, 20.0);
+            cv::Rect rect = cv::Rect(minx - 1, miny - 1, maxx - minx + 2, maxy - miny + 2);
+            cv::rectangle(original, rect, color, 2);
+        }
+    }
 
     cv::namedWindow("POBR - original image", cv::WINDOW_AUTOSIZE);
     cv::imshow("POBR - original image", original);

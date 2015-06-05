@@ -38,7 +38,6 @@ private:
 
 public:
     std::vector<Pixel> pixels;
-
     int minx;
     int miny;
     int maxx;
