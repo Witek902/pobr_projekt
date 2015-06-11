@@ -1,3 +1,9 @@
+/**
+ * POBR - projekt
+ * 
+ * @author Michal Witanowski
+ */
+
 #pragma once
 
 #include "targetver.h"

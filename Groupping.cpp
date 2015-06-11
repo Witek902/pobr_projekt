@@ -1,3 +1,9 @@
+/**
+ * POBR - projekt
+ * 
+ * @author Michal Witanowski
+ */
+
 #include "stdafx.h"
 #include "Groupping.hpp"
 

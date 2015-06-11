@@ -1,3 +1,9 @@
+/**
+ * POBR - projekt
+ * 
+ * @author Michal Witanowski
+ */
+
 #include "stdafx.h"
 #include "Segment.hpp"
 #include "Groupping.hpp"
@@ -231,7 +237,7 @@ cv::Mat VisualizeSegments(const cv::Mat& input, const std::vector<Segment*> segm
 {
     assert(CV_32SC1 == input.type());
 
-    cv::Mat visual(input.rows, input.cols, CV_8SC3, cvScalar(0.0f));
+    cv::Mat visual(input.rows, input.cols, CV_8UC3, cvScalar(0.0f));
 
     int id = 0;
     for (const Segment* segment : segments)
@@ -241,7 +247,7 @@ cv::Mat VisualizeSegments(const cv::Mat& input, const std::vector<Segment*> segm
         int b = FastRand(id + 101531671);
         for (const Pixel& p : segment->pixels)
         {
-            visual.at<cv::Vec3b>(p.y, p.x) = cv::Vec3b(r % 256, g % 256, b % 256);
+            visual.at<cv::Vec3b>(p.y, p.x) = cv::Vec3b(r % 192, g % 192, b % 192);
         }
         id++;
     }
@@ -253,7 +259,7 @@ cv::Mat VisualizePixelGroups(const cv::Mat& input)
 {
     assert(CV_32SC1 == input.type());
 
-    cv::Mat visual(input.rows, input.cols, CV_8SC3, cvScalar(0.0f));
+    cv::Mat visual(input.rows, input.cols, CV_8UC3, cvScalar(0.0f));
     for (int i = 0; i < input.rows; ++i)
     {
         for (int j = 0; j < input.cols; ++j)
@@ -294,6 +300,8 @@ int MomentCalculator(int argc, char** argv)
     return 0;
 }
 
+#define DEBUG_IMAGES
+
 int main(int argc, char** argv)
 {
     if (argc < 2)
@@ -302,47 +310,72 @@ int main(int argc, char** argv)
         return -1;
     }
 
+    // image moements calculator
     if (strcmp(argv[1], "--moments") == 0 ||
         strcmp(argv[1], "-m") == 0)
     {
         return MomentCalculator(argc, argv);
     }
 
+    std::string windowName;
+
+    /// open input image
     cv::Mat original;
-    original = cv::imread("Test/10.jpg", cv::IMREAD_COLOR);
+    original = cv::imread(argv[1], cv::IMREAD_COLOR);
     if (original.empty())
     {
         std::cout << "Could not open or find the image" << std::endl;
         return 1;
     }
 
+    /// preprocess input image
     cv::Mat image = Sharpen(original);
-
     cv::Mat binaryImage = Preprocess(image, COLOR_TRESHOLD);
-    cv::namedWindow("POBR - Binary image", cv::WINDOW_AUTOSIZE);
-    cv::imshow("POBR - Binary image", binaryImage);
+#ifdef DEBUG_IMAGES
+    windowName = "POBR - binary image (" + std::string(argv[1]) + ')';
+    cv::namedWindow(windowName, cv::WINDOW_AUTOSIZE);
+    cv::imshow(windowName, binaryImage);
+#endif // DEBUG_IMAGES
 
+
+    /// extract pixel groups and segments from binary image
     std::vector<Segment*> segments;
     cv::Mat pixelGroups = CalculatePixelGroups(binaryImage, segments);
+
+    /// (optional) visualize pixel groups
+#ifdef DEBUG_IMAGES
+    cv::Mat pixelGroupsImage = VisualizePixelGroups(pixelGroups);
+    windowName = "POBR - pixel groups (" + std::string(argv[1]) + ')';
+    cv::namedWindow(windowName, cv::WINDOW_AUTOSIZE);
+    cv::imshow(windowName, pixelGroupsImage);
+#endif // DEBUG_IMAGES
+
     cv::Mat segmentsVisual = VisualizeSegments(pixelGroups, segments);
-    //cv::Mat segmentsVisual = VisualizePixelGroups(pixelGroups);
 
-
+    /// find letter candidates
     std::vector<Segment*> letterCandidates;
     for (Segment* seg : segments)
-    {
         if (seg->Classify() > 0)
         {
             letterCandidates.push_back(seg);
-            /*
-            cv::Scalar color = cv::Scalar(0.0, 255.0, 20.0);
+
+#ifdef DEBUG_IMAGES
+            cv::Scalar color = cv::Scalar(255.0, 255.0, 255.0);
             cv::Rect rect = cv::Rect(seg->minx - 1, seg->miny - 1,
                                      seg->maxx - seg->minx + 2, seg->maxy - seg->miny + 2);
-            cv::rectangle(original, rect, color, 1);
-            */
+            cv::rectangle(segmentsVisual, rect, color, 2);
+#endif // DEBUG_IMAGES
         }
-    }
 
+    /// (optional) visualize segments
+#ifdef DEBUG_IMAGES
+    windowName = "POBR - segments (" + std::string(argv[1]) + ')';
+    cv::namedWindow(windowName, cv::WINDOW_AUTOSIZE);
+    cv::imshow(windowName, segmentsVisual);
+#endif // DEBUG_IMAGES
+
+
+    /// group letter candidates
     std::vector<SegmentGroup> groups;
     PerformSegmentGroupping(letterCandidates, groups);
     std::cout << "Groups found: " << groups.size() << std::endl;
@@ -366,14 +399,15 @@ int main(int argc, char** argv)
                 ", maxX=" << maxx << ", maxY=" << maxy << std::endl;
 
             // draw valid group
-            cv::Scalar color = cv::Scalar(0.0, 255.0, 20.0);
+            cv::Scalar color = cv::Scalar(0.0, 0.0, 255.0);
             cv::Rect rect = cv::Rect(minx - 1, miny - 1, maxx - minx + 2, maxy - miny + 2);
             cv::rectangle(original, rect, color, 2);
         }
     }
 
-    cv::namedWindow("POBR - original image", cv::WINDOW_AUTOSIZE);
-    cv::imshow("POBR - original image", original);
+    windowName = "POBR - original image (" + std::string(argv[1]) + ')';
+    cv::namedWindow(windowName, cv::WINDOW_AUTOSIZE);
+    cv::imshow(windowName, original);
 
     cv::waitKey(0);
     return 0;

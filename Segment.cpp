@@ -1,3 +1,9 @@
+/**
+ * POBR - projekt
+ * 
+ * @author Michal Witanowski
+ */
+
 #include "stdafx.h"
 #include "Segment.hpp"
 
@@ -37,8 +43,8 @@ void Segment::Process()
 bool Segment::CanReject(int imageWidth, int imageHeight) const
 {
     return
-        (maxx - minx < 8) ||
-        (maxy - miny < 8) ||
+        (maxx - minx < 7) ||
+        (maxy - miny < 7) ||
         (maxx - minx > imageWidth / 4) ||
         (maxy - miny > imageHeight / 4);
 }
